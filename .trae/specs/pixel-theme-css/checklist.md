@@ -1,0 +1,21 @@
+# 检查清单
+
+- [x] 主题目录结构已创建于 src/themes/
+- [x] variables.css 包含所有提取的 CSS 自定义属性
+- [x] reset.css 包含共享重置和基础样式
+- [x] default.theme.css 保留原始 style.css 不变
+- [x] pixel.theme.css 实现完整的 1-bit dither-punk horror 美学
+- [x] pixel.theme.css 只使用 #000000 和 #FFFFFF 颜色
+- [x] pixel.theme.css 有 3 层边框系统(黑/白/黑)
+- [x] pixel.theme.css 有反转按钮状态
+- [x] pixel.theme.css 有尖角(无 border-radius)
+- [x] pixel.theme.css 通过 CSS/SVG 图案实现抖动背景
+- [x] pixel.theme.css 标题使用大写和字间距
+- [x] pixel.theme.css 白色元素有"燃烧"发光效果
+- [x] pixel.theme.css 有卡顿/步进动画实现复古感
+- [x] pixel.theme.css 卡牌稀有度使用新的 1-bit 美学展示
+- [x] pixel.theme.css 普通稀有度:白色方块带黑色点状抖动
+- [x] pixel.theme.css 稀有稀有度:黑色方块带白色交叉线图案
+- [x] pixel.theme.css 史诗稀有度:白色方块带黑色对角线图案
+- [x] pixel.theme.css 传说稀有度:纯黑方块带白色边框闪烁效果
+- [x] src/style.css 已更新为导入默认主题

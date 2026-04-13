@@ -1,0 +1,35 @@
+@import url("https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=IBM+Plex+Mono:wght@400;700&display=swap");
+
+:root {
+  --ink: #171411;
+  --muted: #6a6259;
+  --paper: #f8f3e7;
+  --paper-strong: #fffaf0;
+  --line: #2a241d;
+  --red: #d83b31;
+  --gold: #d9a129;
+  --green: #1f9d72;
+  --cyan: #1b8aa5;
+  --blue: #3d66c7;
+  --pink: #bd4a72;
+  --shadow: 0 16px 0 rgba(23, 20, 17, 0.16);
+  --font-body: Avenir Next, Trebuchet MS, Verdana, sans-serif;
+  --font-display: Georgia, Palatino, serif;
+
+  --border-radius: 8px;
+  --border-radius-sm: 6px;
+  --border-radius-lg: 8px;
+
+  --spacing-xs: 0.35rem;
+  --spacing-sm: 0.45rem;
+  --spacing-md: 0.55rem;
+  --spacing-lg: 0.75rem;
+  --spacing-xl: 1rem;
+
+  --transition-fast: 160ms ease;
+  --transition-normal: 280ms ease;
+
+  --dither-dot: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23000'/%3E%3C/svg%3E");
+  --dither-cross: url("data:image/svg+xml,%3Csvg width='8' height='8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 4h8M4 0v8' stroke='%23fff' stroke-width='1'/%3E%3C/svg%3E");
+  --dither-diagonal: url("data:image/svg+xml,%3Csvg width='8' height='8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 8L8 0M-2 2L2-2M6 10L10 6' stroke='%23000' stroke-width='1'/%3E%3C/svg%3E");
+}
