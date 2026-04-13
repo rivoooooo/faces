@@ -66,6 +66,7 @@ function App() {
         <Route element={<GamePage />} path="/game/:slotId" />
         <Route element={<SettingsPage />} path="/settings" />
         <Route element={<SettingsPage />} path="/settings/:section" />
+        <Route element={<DeveloperPage />} path="/developer" />
         <Route element={<CodexPage />} path="/codex" />
         <Route element={<Navigate replace to="/" />} path="*" />
       </Routes>
@@ -127,6 +128,9 @@ function HomePage() {
           </Link>
           <Link className="nav-button" to="/settings/cards">
             设置
+          </Link>
+          <Link className="nav-button" to="/developer">
+            开发者
           </Link>
           <button disabled={!ready || saves.length >= 8} type="button" onClick={startGame}>
             新游戏
@@ -277,7 +281,9 @@ function GamePage() {
   const monsterName = isBoss ? `第 ${state.stage} 关 Boss` : state.monsterVisual.name;
 
   return (
-    <main className={`game-shell game-bg-${gameConfig?.background ?? "ember-grid"}`}>
+    <main
+      className={`game-shell game-bg-${gameConfig?.background ?? "ember-grid"} game-shader-${gameConfig?.shader ?? "ember-grid"}`}
+    >
       <section className="topbar topbar-compact">
         <div className="metrics">
           <span>
@@ -634,6 +640,357 @@ function CodexPage() {
     <main className="game-shell page-shell">
       <CardCodex cards={cards} onClose={() => navigate("/")} onSearch={setSearch} search={search} />
     </main>
+  );
+}
+
+function DeveloperPage() {
+  const navigate = useNavigate();
+  const [gameConfig, setGameConfig] = useState<GameConfig>(defaultGameConfig);
+  const [monsterTemplates, setMonsterTemplates] = useState<MonsterTemplate[]>([]);
+  const [selectedMonsterId, setSelectedMonsterId] = useState(defaultMonsterTemplates[0].id);
+  const [previewMonster, setPreviewMonster] = useState<GeneratedMonster>(() =>
+    generateMonsterVisual(defaultMonsterTemplates, defaultGameConfig),
+  );
+  const [status, setStatus] = useState("开发者模式读取全局配置。");
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([loadGameConfig(), loadMonsterTemplates()]).then(([loadedConfig, loaded]) => {
+      if (!active) return;
+      const templates = loaded.length > 0 ? loaded : defaultMonsterTemplates;
+      setGameConfig(loadedConfig);
+      setMonsterTemplates(templates);
+      setSelectedMonsterId(templates[0]?.id ?? defaultMonsterTemplates[0].id);
+      setPreviewMonster(generateMonsterVisual(templates, loadedConfig));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const selectedMonster =
+    monsterTemplates.find((template) => template.id === selectedMonsterId) ?? monsterTemplates[0];
+
+  const updateConfig = <K extends keyof GameConfig>(key: K, value: GameConfig[K]) => {
+    const next = { ...gameConfig, [key]: value };
+    setGameConfig(next);
+    setPreviewMonster(generateMonsterVisual(monsterTemplates, next));
+  };
+
+  const updateMonster = (template: MonsterTemplate) => {
+    setMonsterTemplates((templates) =>
+      templates.map((item) => (item.id === selectedMonsterId ? template : item)),
+    );
+    setSelectedMonsterId(template.id);
+    setPreviewMonster({ ...template, templateId: template.id, mixed: false });
+  };
+
+  const createDevMonster = () => {
+    const nextId = Math.max(0, ...monsterTemplates.map((template) => template.id)) + 1;
+    const template: MonsterTemplate = {
+      id: nextId,
+      name: `开发模板-${String(nextId).padStart(2, "0")}`,
+      stance: "站立",
+      head: { kind: "svg", value: "◉‿◉" },
+      body: { kind: "svg", value: "⬢" },
+      leftHand: { kind: "svg", value: "╱" },
+      rightHand: { kind: "svg", value: "╲" },
+      leftLeg: { kind: "svg", value: "╿" },
+      rightLeg: { kind: "svg", value: "╽" },
+      hitAudio: "",
+      backgroundMusic: "",
+    };
+    setMonsterTemplates((templates) => [...templates, template]);
+    setSelectedMonsterId(template.id);
+    setPreviewMonster({ ...template, templateId: template.id, mixed: false });
+  };
+
+  const saveDeveloperConfig = async () => {
+    await putGameConfig(gameConfig);
+    for (const template of monsterTemplates) {
+      await putMonsterTemplate(template);
+    }
+    setStatus(`已保存 ${monsterTemplates.length} 个怪物模板和全局游戏配置。`);
+  };
+
+  const randomPreview = (forceMixed = false) => {
+    const config = forceMixed
+      ? { ...gameConfig, mixedMonsterEnabled: true, mixedMonsterChance: 100 }
+      : gameConfig;
+    setPreviewMonster(generateMonsterVisual(monsterTemplates, config));
+  };
+
+  return (
+    <main
+      className={`game-shell page-shell developer-page game-bg-${gameConfig.background} game-shader-${gameConfig.shader}`}
+    >
+      <section className="topbar">
+        <div>
+          <p className="eyebrow">Developer</p>
+          <h1>开发者模式</h1>
+        </div>
+        <div className="top-actions">
+          <button type="button" onClick={() => void saveDeveloperConfig()}>
+            保存到 index.db
+          </button>
+          <button className="secondary" type="button" onClick={() => navigate("/")}>
+            返回主页
+          </button>
+        </div>
+      </section>
+
+      <section className="developer-grid">
+        <article className="dev-preview">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Preview</p>
+              <h2>游戏场景</h2>
+            </div>
+            <div className="settings-actions">
+              <button className="secondary" type="button" onClick={() => randomPreview()}>
+                随机怪物
+              </button>
+              <button className="secondary" type="button" onClick={() => randomPreview(true)}>
+                混合预览
+              </button>
+            </div>
+          </div>
+          <div
+            className={`dev-scene game-bg-${gameConfig.background} game-shader-${gameConfig.shader}`}
+          >
+            <aside className="dev-combat-panel">
+              <p className="eyebrow">Player</p>
+              <b>生命 5/5</b>
+              <span>能量 3</span>
+            </aside>
+            <section className="dev-monster-stage">
+              <div className="monster-aura" />
+              <div className="monster">
+                <MonsterVisual isBoss={false} visual={previewMonster} />
+              </div>
+              <h3>{previewMonster.name}</h3>
+              <p>{previewMonster.mixed ? "混合怪物" : `模板 #${previewMonster.templateId}`}</p>
+            </section>
+            <aside className="dev-combat-panel">
+              <p className="eyebrow">Intent</p>
+              <b>技能 A</b>
+              <span>技能 B</span>
+            </aside>
+          </div>
+          <div className="dev-audio-grid">
+            <AudioPreview label="游戏背景音乐" src={gameConfig.music} />
+            <AudioPreview label="怪物背景音乐" src={previewMonster.backgroundMusic} />
+            <AudioPreview label="挂物音频" src={previewMonster.hitAudio} />
+          </div>
+          <p className="dev-status">{status}</p>
+        </article>
+
+        <article className="dev-panel">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Scene</p>
+              <h2>场景和音乐</h2>
+            </div>
+          </div>
+          <GameConfigDeveloperPanel config={gameConfig} onChange={updateConfig} />
+        </article>
+
+        <article className="dev-panel">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Monster</p>
+              <h2>怪物调试</h2>
+            </div>
+            <button className="secondary" type="button" onClick={createDevMonster}>
+              新建模板
+            </button>
+          </div>
+          <div className="dev-two-column">
+            <div className="settings-card-list">
+              {monsterTemplates.map((template) => (
+                <button
+                  className={`settings-row ${selectedMonster?.id === template.id ? "selected" : ""}`}
+                  key={template.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedMonsterId(template.id);
+                    setPreviewMonster({ ...template, templateId: template.id, mixed: false });
+                  }}
+                >
+                  <span>{template.name}</span>
+                  <b>{template.stance}</b>
+                </button>
+              ))}
+            </div>
+            {selectedMonster ? (
+              <DeveloperMonsterForm monster={selectedMonster} onChange={updateMonster} />
+            ) : (
+              <p className="empty-pack">没有可调试的怪物模板。</p>
+            )}
+          </div>
+        </article>
+
+        <article className="dev-panel">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Plugin</p>
+              <h2>插件内容</h2>
+            </div>
+          </div>
+          <label>
+            插件 API / Mod 入口
+            <textarea
+              className="dev-code"
+              value={gameConfig.pluginApi}
+              onChange={(event) => updateConfig("pluginApi", event.target.value)}
+            />
+          </label>
+        </article>
+      </section>
+    </main>
+  );
+}
+
+function GameConfigDeveloperPanel({
+  config,
+  onChange,
+}: {
+  config: GameConfig;
+  onChange: <K extends keyof GameConfig>(key: K, value: GameConfig[K]) => void;
+}) {
+  return (
+    <div className="dev-form">
+      <label>
+        游戏背景
+        <select
+          value={config.background}
+          onChange={(event) =>
+            onChange("background", event.target.value as GameConfig["background"])
+          }
+        >
+          <option value="ember-grid">Ember Grid</option>
+          <option value="neon-rift">Neon Rift</option>
+          <option value="toxic-wave">Toxic Wave</option>
+          <option value="star-forge">Star Forge</option>
+        </select>
+      </label>
+      <label>
+        Shader
+        <select
+          value={config.shader}
+          onChange={(event) => onChange("shader", event.target.value as GameConfig["shader"])}
+        >
+          <option value="ember-grid">Ember Grid</option>
+          <option value="neon-rift">Neon Rift</option>
+          <option value="toxic-wave">Toxic Wave</option>
+          <option value="star-forge">Star Forge</option>
+        </select>
+      </label>
+      <label>
+        游戏音乐 URL
+        <input value={config.music} onChange={(event) => onChange("music", event.target.value)} />
+      </label>
+      <label>
+        混合怪物概率：{config.mixedMonsterChance}%
+        <input
+          max="100"
+          min="0"
+          type="range"
+          value={config.mixedMonsterChance}
+          onChange={(event) => onChange("mixedMonsterChance", Number(event.target.value))}
+        />
+      </label>
+      <label className="check-row">
+        <input
+          checked={config.mixedMonsterEnabled}
+          type="checkbox"
+          onChange={(event) => onChange("mixedMonsterEnabled", event.target.checked)}
+        />
+        开启混合怪物
+      </label>
+    </div>
+  );
+}
+
+function DeveloperMonsterForm({
+  monster,
+  onChange,
+}: {
+  monster: MonsterTemplate;
+  onChange: (monster: MonsterTemplate) => void;
+}) {
+  const updatePart = (
+    key: keyof Pick<
+      MonsterTemplate,
+      "head" | "body" | "leftHand" | "rightHand" | "leftLeg" | "rightLeg"
+    >,
+    part: MonsterPart,
+  ) => {
+    onChange({ ...monster, [key]: part });
+  };
+
+  return (
+    <div className="dev-form">
+      <label>
+        ID
+        <input
+          type="number"
+          value={monster.id}
+          onChange={(event) => onChange({ ...monster, id: Number(event.target.value) })}
+        />
+      </label>
+      <label>
+        名称
+        <input
+          value={monster.name}
+          onChange={(event) => onChange({ ...monster, name: event.target.value })}
+        />
+      </label>
+      <label>
+        姿态
+        <select
+          value={monster.stance}
+          onChange={(event) =>
+            onChange({ ...monster, stance: event.target.value as MonsterTemplate["stance"] })
+          }
+        >
+          <option value="站立">站立</option>
+          <option value="四肢模式">四肢模式</option>
+          <option value="爬行">爬行</option>
+        </select>
+      </label>
+      {(["head", "body", "leftHand", "rightHand", "leftLeg", "rightLeg"] as const).map((key) => (
+        <PartEditor
+          key={key}
+          label={key}
+          part={monster[key]}
+          onChange={(part) => updatePart(key, part)}
+        />
+      ))}
+      <label>
+        挂物音频 URL
+        <input
+          value={monster.hitAudio}
+          onChange={(event) => onChange({ ...monster, hitAudio: event.target.value })}
+        />
+      </label>
+      <label>
+        怪物背景音乐 URL
+        <input
+          value={monster.backgroundMusic}
+          onChange={(event) => onChange({ ...monster, backgroundMusic: event.target.value })}
+        />
+      </label>
+    </div>
+  );
+}
+
+function AudioPreview({ label, src }: { label: string; src: string }) {
+  return (
+    <div className="audio-preview">
+      <span>{label}</span>
+      {src ? <audio controls src={src} /> : <b>未配置</b>}
+    </div>
   );
 }
 

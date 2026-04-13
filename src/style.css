@@ -135,6 +135,18 @@ h2 {
     rgba(27, 138, 165, 0.12);
 }
 
+.game-shader-neon-rift {
+  filter: saturate(1.16) contrast(1.04);
+}
+
+.game-shader-toxic-wave {
+  filter: hue-rotate(18deg) saturate(1.18);
+}
+
+.game-shader-star-forge {
+  filter: brightness(1.04) contrast(1.08);
+}
+
 .topbar,
 .battlefield,
 .start-screen,
@@ -869,7 +881,11 @@ h2 {
 .search-input,
 .card-editor input,
 .card-editor select,
-.card-editor textarea {
+.card-editor textarea,
+.dev-form input,
+.dev-form select,
+.dev-form textarea,
+.dev-code {
   width: 100%;
   border: 2px solid var(--line);
   border-radius: 8px;
@@ -1005,6 +1021,138 @@ h2 {
   color: var(--muted);
   font-weight: 900;
   text-align: center;
+}
+
+.developer-page {
+  max-width: 1560px;
+  padding-bottom: 1rem;
+}
+
+.developer-grid {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.25fr) minmax(320px, 0.75fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.dev-preview,
+.dev-panel {
+  border: 3px solid var(--line);
+  border-radius: 8px;
+  background: rgba(248, 243, 231, 0.94);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+}
+
+.dev-preview {
+  grid-row: span 3;
+}
+
+.dev-scene {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.45fr) minmax(260px, 1fr) minmax(120px, 0.45fr);
+  align-items: center;
+  min-height: 520px;
+  border: 3px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 1rem;
+}
+
+.dev-combat-panel {
+  display: grid;
+  gap: 0.45rem;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 250, 240, 0.84);
+  padding: 0.85rem;
+}
+
+.dev-combat-panel b,
+.dev-combat-panel span {
+  font-weight: 900;
+}
+
+.dev-monster-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 0.3rem;
+  min-height: 460px;
+  text-align: center;
+}
+
+.dev-monster-stage .monster {
+  width: min(100%, 340px);
+  height: min(55vw, 340px);
+}
+
+.dev-monster-stage h3 {
+  margin: 0;
+  font: 900 1.5rem/1.1 var(--font-display);
+}
+
+.dev-monster-stage p {
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.dev-audio-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.audio-preview {
+  display: grid;
+  gap: 0.5rem;
+  border: 2px solid rgba(42, 36, 29, 0.32);
+  border-radius: 8px;
+  background: rgba(255, 250, 240, 0.72);
+  padding: 0.75rem;
+}
+
+.audio-preview span,
+.audio-preview b {
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.audio-preview audio {
+  width: 100%;
+}
+
+.dev-status {
+  margin-top: 0.85rem;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.dev-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.dev-form label,
+.dev-panel label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.dev-two-column {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.55fr) minmax(220px, 1fr);
+  gap: 0.85rem;
+}
+
+.dev-code {
+  min-height: 260px;
+  resize: vertical;
+  font-family: Menlo, Consolas, monospace;
+  font-size: 0.88rem;
 }
 
 .pack-section {
@@ -1238,6 +1386,25 @@ h2 {
   .settings-layout {
     grid-template-columns: 1fr;
   }
+
+  .developer-page {
+    padding-bottom: 0.7rem;
+  }
+
+  .developer-grid,
+  .dev-scene,
+  .dev-two-column,
+  .dev-audio-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dev-scene {
+    min-height: auto;
+  }
+
+  .dev-monster-stage {
+    min-height: 360px;
+  }
 }
 
 @media (max-width: 520px) {
@@ -1259,6 +1426,17 @@ h2 {
 
   .monster-stage {
     min-height: 310px;
+  }
+
+  .dev-preview,
+  .dev-panel {
+    border-width: 2px;
+    box-shadow: 7px 7px 0 rgba(23, 20, 17, 0.16);
+    padding: 0.75rem;
+  }
+
+  .dev-monster-stage {
+    min-height: 300px;
   }
 
   .card-fan {
