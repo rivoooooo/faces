@@ -57,8 +57,13 @@ import {
   type SaveSlot,
 } from "./storage";
 import "./style.css";
+import { getCurrentThemeId, getThemes, initTheme, setTheme, type ThemeId } from "./theme-loader";
 
 function App() {
+  useEffect(() => {
+    void initTheme();
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
@@ -585,6 +590,9 @@ function SettingsPage() {
               <Link className="nav-button" to="/settings/mods">
                 Mod
               </Link>
+              <Link className="nav-button" to="/settings/theme">
+                主题
+              </Link>
               <button className="secondary" type="button" onClick={() => navigate("/")}>
                 返回
               </button>
@@ -607,6 +615,8 @@ function SettingsPage() {
               onImport={(file) => void importMod(file)}
               pluginApi={gameConfig?.pluginApi ?? ""}
             />
+          ) : section === "theme" ? (
+            <ThemeSettings />
           ) : (
             <Settings
               cards={cards}
@@ -1745,6 +1755,40 @@ function PartEditor({
         onChange={(event) => onChange({ ...part, value: event.target.value })}
       />
     </label>
+  );
+}
+
+function ThemeSettings() {
+  const themes = getThemes();
+  const currentThemeId = getCurrentThemeId();
+
+  const handleThemeChange = (themeId: ThemeId) => {
+    setTheme(themeId);
+  };
+
+  return (
+    <section className="card-editor">
+      <div className="section-title">
+        <p className="eyebrow">Theme</p>
+        <h2>主题设置</h2>
+      </div>
+      <div className="settings-list" style={{ gap: "0.75rem" }}>
+        {themes.map((theme) => (
+          <button
+            className={`settings-row ${currentThemeId === theme.id ? "selected" : ""}`}
+            key={theme.id}
+            type="button"
+            onClick={() => handleThemeChange(theme.id as ThemeId)}
+          >
+            <span>{theme.name}</span>
+            <b>{currentThemeId === theme.id ? "当前使用" : "点击切换"}</b>
+          </button>
+        ))}
+      </div>
+      <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: "0.5rem" }}>
+        主题切换后会立即生效。刷新页面后会自动恢复上次选择的主题。
+      </p>
+    </section>
   );
 }
 
