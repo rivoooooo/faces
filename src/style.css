@@ -53,6 +53,20 @@ button {
     filter 160ms ease;
 }
 
+.nav-button {
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-strong);
+  box-shadow: 4px 4px 0 var(--line);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0.8rem 1rem;
+  font: 800 0.95rem/1 var(--font-body);
+  text-decoration: none;
+}
+
 button:hover:not(:disabled) {
   filter: brightness(1.04);
   transform: translate(-2px, -2px);
@@ -517,6 +531,15 @@ h2 {
   font-style: normal;
 }
 
+.card-image {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--paper-strong);
+}
+
 .card-type,
 .card-power {
   font-size: 0.78rem;
@@ -567,6 +590,41 @@ h2 {
   gap: 1rem;
   min-height: 560px;
   padding: clamp(1rem, 4vw, 3rem);
+}
+
+.home-screen {
+  grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr);
+}
+
+.save-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.save-slot {
+  display: grid;
+  gap: 0.45rem;
+  min-height: 126px;
+  background: var(--paper-strong);
+  text-align: left;
+}
+
+.save-slot span {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+}
+
+.save-slot b,
+.save-slot em {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.save-slot.empty {
+  opacity: 0.5;
+  place-items: center;
+  text-align: center;
 }
 
 .start-copy {
@@ -655,6 +713,17 @@ h2 {
   background: rgba(23, 20, 17, 0.5);
 }
 
+.codex-layer,
+.settings-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(23, 20, 17, 0.5);
+}
+
 .reward-box {
   width: min(980px, 100%);
   max-height: calc(100svh - 2rem);
@@ -664,6 +733,8 @@ h2 {
 
 .log-box,
 .backpack-box,
+.library-box,
+.settings-box,
 .help-box {
   width: min(660px, 100%);
   border: 3px solid var(--line);
@@ -681,6 +752,128 @@ h2 {
   width: min(1120px, 100%);
   max-height: calc(100svh - 2rem);
   overflow: auto;
+}
+
+.library-box,
+.settings-box {
+  width: min(1180px, 100%);
+  max-height: calc(100svh - 2rem);
+  overflow: auto;
+}
+
+.search-input,
+.card-editor input,
+.card-editor select,
+.card-editor textarea {
+  width: 100%;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-strong);
+  color: var(--ink);
+  font: 800 0.95rem/1.25 var(--font-body);
+  padding: 0.72rem 0.8rem;
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.library-grid .card {
+  min-height: 178px;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.85fr) minmax(320px, 1.15fr);
+  gap: 1rem;
+}
+
+.settings-list,
+.card-editor {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+
+.settings-card-list {
+  display: grid;
+  gap: 0.45rem;
+  max-height: min(66svh, 640px);
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.settings-row {
+  display: grid;
+  gap: 0.2rem;
+  min-height: auto;
+  background: var(--paper-strong);
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+}
+
+.settings-row.selected {
+  background: #ffe3a6;
+}
+
+.settings-row span {
+  font-weight: 900;
+}
+
+.settings-row b {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.card-editor {
+  border: 2px dashed rgba(42, 36, 29, 0.38);
+  border-radius: 8px;
+  background: rgba(255, 250, 240, 0.42);
+  padding: 0.85rem;
+}
+
+.card-editor label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.card-editor textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.editor-preview {
+  width: min(180px, 100%);
+}
+
+.editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.danger {
+  background: #ffb0a8;
+}
+
+.empty-editor {
+  min-height: 220px;
+  place-items: center;
+  color: var(--muted);
+  font-weight: 900;
+  text-align: center;
 }
 
 .pack-section {
@@ -909,6 +1102,10 @@ h2 {
 
   .action-hint {
     bottom: 235px;
+  }
+
+  .settings-layout {
+    grid-template-columns: 1fr;
   }
 }
 
