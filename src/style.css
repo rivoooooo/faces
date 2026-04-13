@@ -117,6 +117,24 @@ h2 {
   padding: 1rem 1rem 235px;
 }
 
+.game-bg-neon-rift {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(27, 138, 165, 0.25), transparent 32%),
+    radial-gradient(circle at 80% 30%, rgba(189, 74, 114, 0.25), transparent 32%);
+}
+
+.game-bg-toxic-wave {
+  background:
+    repeating-linear-gradient(135deg, rgba(31, 157, 114, 0.18) 0 12px, transparent 12px 28px),
+    rgba(248, 243, 231, 0.2);
+}
+
+.game-bg-star-forge {
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.55) 1px, transparent 2px) 0 0 / 32px 32px,
+    rgba(27, 138, 165, 0.12);
+}
+
 .topbar,
 .battlefield,
 .start-screen,
@@ -232,6 +250,93 @@ h2 {
   width: min(55vw, 300px);
   z-index: 1;
   animation: breathe 2.8s ease-in-out infinite;
+}
+
+.monster-build {
+  position: relative;
+  width: min(55vw, 300px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(8px 12px 0 rgba(42, 36, 29, 0.22));
+}
+
+.monster-part {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border: 3px solid var(--line);
+  border-radius: 8px;
+  background: #2c9a82;
+  color: #fffaf0;
+  font: 900 2rem/1 var(--font-display);
+  min-width: 54px;
+  min-height: 54px;
+  padding: 0.35rem;
+}
+
+.monster-part img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.monster-part-head {
+  top: 10%;
+  width: 42%;
+  height: 27%;
+}
+
+.monster-part-body {
+  top: 36%;
+  width: 50%;
+  height: 35%;
+  background: #93d2a4;
+  color: var(--line);
+}
+
+.monster-part-left-hand {
+  top: 42%;
+  left: 9%;
+}
+
+.monster-part-right-hand {
+  top: 42%;
+  right: 9%;
+}
+
+.monster-part-left-leg {
+  bottom: 8%;
+  left: 30%;
+}
+
+.monster-part-right-leg {
+  right: 30%;
+  bottom: 8%;
+}
+
+.stance-爬行 .monster-part-head {
+  top: 25%;
+  left: 18%;
+}
+
+.stance-爬行 .monster-part-body {
+  top: 42%;
+  width: 64%;
+}
+
+.stance-四肢模式 .monster-part-left-hand,
+.stance-四肢模式 .monster-part-right-hand {
+  top: 34%;
+}
+
+.boss-build .monster-part {
+  background: #b9423a;
+}
+
+.boss-build .monster-part-body {
+  background: #ef9b5f;
 }
 
 .monster-impact {
@@ -792,6 +897,10 @@ h2 {
   justify-content: flex-end;
 }
 
+.compact-title {
+  margin-top: 1rem;
+}
+
 .settings-layout {
   display: grid;
   grid-template-columns: minmax(240px, 0.85fr) minmax(320px, 1.15fr);
@@ -862,6 +971,28 @@ h2 {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.file-button {
+  display: inline-grid;
+  min-height: auto;
+  place-items: center;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-strong);
+  box-shadow: 3px 3px 0 var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  font: 900 0.88rem/1 var(--font-body);
+  padding: 0.85rem 1rem;
+}
+
+.file-button input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .danger {

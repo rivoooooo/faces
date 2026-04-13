@@ -16,7 +16,10 @@ import {
   createCardMap,
   createEmptyGameState,
   createGameState,
+  defaultGameConfig,
+  defaultMonsterTemplates,
   filterCards,
+  generateMonsterVisual,
   labelType,
   moveCardInState,
   normalizeCard,
@@ -28,18 +31,27 @@ import {
   type CardType,
   type DropTarget,
   type Fighter,
+  type GameConfig,
   type GameState,
+  type GeneratedMonster,
+  type MonsterPart,
+  type MonsterTemplate,
   type Rarity,
 } from "./game";
 import {
   createSnapshot,
   deleteCardFromDb,
+  deleteMonsterTemplate,
   getSaveSlot,
   getSnapshot,
   loadCardsFromDb,
+  loadGameConfig,
+  loadMonsterTemplates,
   loadSaveSlots,
   makeSaveSlot,
   putCardInDb,
+  putGameConfig,
+  putMonsterTemplate,
   putSaveSlot,
   updateSaveSlot,
   type SaveSlot,
@@ -53,6 +65,7 @@ function App() {
         <Route element={<HomePage />} path="/" />
         <Route element={<GamePage />} path="/game/:slotId" />
         <Route element={<SettingsPage />} path="/settings" />
+        <Route element={<SettingsPage />} path="/settings/:section" />
         <Route element={<CodexPage />} path="/codex" />
         <Route element={<Navigate replace to="/" />} path="*" />
       </Routes>
@@ -63,14 +76,23 @@ function App() {
 function HomePage() {
   const navigate = useNavigate();
   const [cards, setCards] = useState<Card[]>([]);
+  const [gameConfig, setGameConfig] = useState<GameConfig | null>(null);
+  const [monsterTemplates, setMonsterTemplates] = useState<MonsterTemplate[]>([]);
   const [saves, setSaves] = useState<SaveSlot[]>([]);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let active = true;
-    void Promise.all([loadCardsFromDb(), loadSaveSlots()]).then(([loadedCards, loadedSaves]) => {
+    void Promise.all([
+      loadCardsFromDb(),
+      loadGameConfig(),
+      loadMonsterTemplates(),
+      loadSaveSlots(),
+    ]).then(([loadedCards, loadedConfig, loadedTemplates, loadedSaves]) => {
       if (!active) return;
       setCards(loadedCards);
+      setGameConfig(loadedConfig);
+      setMonsterTemplates(loadedTemplates);
       setSaves(loadedSaves);
       setReady(true);
     });
@@ -80,9 +102,13 @@ function HomePage() {
   }, []);
 
   const startGame = async () => {
-    if (!ready || saves.length >= 8) return;
-    const snapshot = await createSnapshot(cards);
-    const gameState = createGameState(snapshot.cards);
+    if (!ready || saves.length >= 8 || !gameConfig) return;
+    const snapshot = await createSnapshot(cards, gameConfig, monsterTemplates);
+    const gameState = createGameState(
+      snapshot.cards,
+      snapshot.monsterTemplates,
+      snapshot.gameConfig,
+    );
     const save = makeSaveSlot(gameState, snapshot, saves.length);
     await putSaveSlot(save);
     void navigate(`/game/${save.id}`);
@@ -99,7 +125,7 @@ function HomePage() {
           <Link className="nav-button" to="/codex">
             图鉴
           </Link>
-          <Link className="nav-button" to="/settings">
+          <Link className="nav-button" to="/settings/cards">
             设置
           </Link>
           <button disabled={!ready || saves.length >= 8} type="button" onClick={startGame}>
@@ -147,6 +173,8 @@ function GamePage() {
   const navigate = useNavigate();
   const [save, setSave] = useState<SaveSlot | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
+  const [gameConfig, setGameConfig] = useState<GameConfig | null>(null);
+  const [monsterTemplates, setMonsterTemplates] = useState<MonsterTemplate[]>([]);
   const [state, setState] = useState<GameState>(createEmptyGameState);
   const [helpOpen, setHelpOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -168,8 +196,18 @@ function GamePage() {
       const snapshot = await getSnapshot(loadedSave.configSnapshotId);
       if (!active || !snapshot) return;
       setSave(loadedSave);
+      const safeGameConfig = snapshot.gameConfig ?? defaultGameConfig;
+      const safeMonsterTemplates = snapshot.monsterTemplates ?? defaultMonsterTemplates;
+      const safeGameState = {
+        ...loadedSave.gameState,
+        monsterVisual:
+          loadedSave.gameState.monsterVisual ??
+          generateMonsterVisual(safeMonsterTemplates, safeGameConfig),
+      };
       setCards(snapshot.cards);
-      setState(loadedSave.gameState);
+      setGameConfig(safeGameConfig);
+      setMonsterTemplates(safeMonsterTemplates);
+      setState(safeGameState);
       loaded.current = true;
     });
 
@@ -215,7 +253,14 @@ function GamePage() {
   };
 
   const chooseReward = (cardId: number) => {
-    setState((snapshot) => proceedToNextStage(addCardToDeck(snapshot, cardId, cardMap), cards));
+    setState((snapshot) =>
+      proceedToNextStage(
+        addCardToDeck(snapshot, cardId, cardMap),
+        cards,
+        monsterTemplates,
+        gameConfig ?? undefined,
+      ),
+    );
   };
 
   if (!slotId) return <Navigate replace to="/" />;
@@ -229,10 +274,10 @@ function GamePage() {
   const handCards = visibleCards.slice(0, 6);
   const monsterCards = state.monsterCardIds.map((id) => cardMap.get(id)).filter(isCard);
   const rewardCards = state.rewardIds.map((id) => cardMap.get(id)).filter(isCard);
-  const monsterName = isBoss ? `第 ${state.stage} 关 Boss` : `第 ${state.stage} 关怪物`;
+  const monsterName = isBoss ? `第 ${state.stage} 关 Boss` : state.monsterVisual.name;
 
   return (
-    <main className="game-shell">
+    <main className={`game-shell game-bg-${gameConfig?.background ?? "ember-grid"}`}>
       <section className="topbar topbar-compact">
         <div className="metrics">
           <span>
@@ -291,7 +336,7 @@ function GamePage() {
         <section className="monster-stage">
           <div className="monster-aura" />
           <div className="monster" aria-label={monsterName}>
-            <MonsterSvg isBoss={isBoss} />
+            <MonsterVisual isBoss={isBoss} visual={state.monsterVisual} />
           </div>
           <div className="monster-info">
             <p className="eyebrow">
@@ -339,7 +384,11 @@ function GamePage() {
       {state.awaitingReward && (
         <Rewards
           isBossReward={isBoss}
-          onBossHealth={() => setState((snapshot) => chooseBossHealth(snapshot, cards))}
+          onBossHealth={() =>
+            setState((snapshot) =>
+              chooseBossHealth(snapshot, cards, monsterTemplates, gameConfig ?? undefined),
+            )
+          }
           onChoose={chooseReward}
           rewards={rewardCards}
         />
@@ -376,15 +425,26 @@ function GamePage() {
 
 function SettingsPage() {
   const navigate = useNavigate();
+  const { section = "cards" } = useParams();
   const [cards, setCards] = useState<Card[]>([]);
+  const [gameConfig, setGameConfig] = useState<GameConfig | null>(null);
+  const [monsterTemplates, setMonsterTemplates] = useState<MonsterTemplate[]>([]);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
+  const [editingMonster, setEditingMonster] = useState<MonsterTemplate | null>(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    void loadCardsFromDb().then(setCards);
+    void Promise.all([loadCardsFromDb(), loadGameConfig(), loadMonsterTemplates()]).then(
+      ([loadedCards, loadedConfig, loadedTemplates]) => {
+        setCards(loadedCards);
+        setGameConfig(loadedConfig);
+        setMonsterTemplates(loadedTemplates);
+      },
+    );
   }, []);
 
   const reload = async () => setCards(await loadCardsFromDb(false));
+  const reloadMonsters = async () => setMonsterTemplates(await loadMonsterTemplates());
   const saveCard = async (card: Card) => {
     const normalized = normalizeCard(card);
     await putCardInDb(normalized);
@@ -413,29 +473,150 @@ function SettingsPage() {
   };
 
   const exportCards = () => {
-    const blob = new Blob([JSON.stringify(cards, null, 2)], { type: "application/json" });
+    exportJson("cards-export.json", cards);
+  };
+
+  const exportMod = () => {
+    exportJson("mod-export.json", {
+      version: 1,
+      cards,
+      gameConfig,
+      monsterTemplates,
+      pluginApi: gameConfig?.pluginApi,
+    });
+  };
+
+  const saveGameConfig = async (config: GameConfig) => {
+    await putGameConfig(config);
+    setGameConfig(config);
+  };
+
+  const saveMonster = async (template: MonsterTemplate) => {
+    await putMonsterTemplate(template);
+    await reloadMonsters();
+    setEditingMonster(template);
+  };
+
+  const deleteMonster = async (templateId: number) => {
+    await deleteMonsterTemplate(templateId);
+    await reloadMonsters();
+    setEditingMonster(null);
+  };
+
+  const createMonsterTemplate = () => {
+    const nextId = Math.max(0, ...monsterTemplates.map((template) => template.id)) + 1;
+    setEditingMonster({
+      id: nextId,
+      name: `自定义怪物-${String(nextId).padStart(2, "0")}`,
+      stance: "站立",
+      head: { kind: "svg", value: "◉‿◉" },
+      body: { kind: "svg", value: "⬢" },
+      leftHand: { kind: "svg", value: "╱" },
+      rightHand: { kind: "svg", value: "╲" },
+      leftLeg: { kind: "svg", value: "╿" },
+      rightLeg: { kind: "svg", value: "╽" },
+      hitAudio: "",
+      backgroundMusic: "",
+    });
+  };
+
+  const exportJson = (filename: string, data: unknown) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "cards-export.json";
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
   };
 
+  const importMod = async (file: File) => {
+    const content = await file.text();
+    const mod = JSON.parse(content) as {
+      cards?: Card[];
+      gameConfig?: GameConfig;
+      monsterTemplates?: MonsterTemplate[];
+    };
+
+    if (Array.isArray(mod.cards)) {
+      for (const card of mod.cards) {
+        await putCardInDb(normalizeCard(card));
+      }
+      await reload();
+    }
+
+    if (mod.gameConfig) {
+      await saveGameConfig({ ...defaultGameConfig, ...mod.gameConfig, id: "global" });
+    }
+
+    if (Array.isArray(mod.monsterTemplates)) {
+      for (const template of mod.monsterTemplates) {
+        await putMonsterTemplate(template);
+      }
+      await reloadMonsters();
+    }
+  };
+
   return (
     <main className="game-shell page-shell">
-      <Settings
-        cards={cards}
-        editingCard={editingCard}
-        onClose={() => navigate("/")}
-        onCreate={createCard}
-        onDelete={deleteCard}
-        onEdit={setEditingCard}
-        onExport={exportCards}
-        onSave={saveCard}
-        onSearch={setSearch}
-        search={search}
-      />
+      <section className="settings-layer inline-layer">
+        <article className="settings-box">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Settings</p>
+              <h2>设置</h2>
+            </div>
+            <div className="settings-actions">
+              <Link className="nav-button" to="/settings/cards">
+                卡牌
+              </Link>
+              <Link className="nav-button" to="/settings/game">
+                游戏
+              </Link>
+              <Link className="nav-button" to="/settings/monsters">
+                怪物
+              </Link>
+              <Link className="nav-button" to="/settings/mods">
+                Mod
+              </Link>
+              <button className="secondary" type="button" onClick={() => navigate("/")}>
+                返回
+              </button>
+            </div>
+          </div>
+          {section === "game" && gameConfig ? (
+            <GameConfigPanel config={gameConfig} onSave={saveGameConfig} />
+          ) : section === "monsters" ? (
+            <MonsterSettings
+              editingMonster={editingMonster}
+              monsters={monsterTemplates}
+              onCreate={createMonsterTemplate}
+              onDelete={deleteMonster}
+              onEdit={setEditingMonster}
+              onSave={saveMonster}
+            />
+          ) : section === "mods" ? (
+            <ModSettings
+              onExport={exportMod}
+              onImport={(file) => void importMod(file)}
+              pluginApi={gameConfig?.pluginApi ?? ""}
+            />
+          ) : (
+            <Settings
+              cards={cards}
+              editingCard={editingCard}
+              onClose={() => navigate("/")}
+              onCreate={createCard}
+              onDelete={deleteCard}
+              onEdit={setEditingCard}
+              onExport={exportCards}
+              onSave={saveCard}
+              onSearch={setSearch}
+              search={search}
+            />
+          )}
+        </article>
+      </section>
     </main>
   );
 }
@@ -804,53 +985,51 @@ function Settings({
   const visibleCards = filterCards(cards, search);
 
   return (
-    <section className="settings-layer inline-layer">
-      <article className="settings-box">
-        <div className="section-title">
-          <div>
-            <p className="eyebrow">Settings</p>
-            <h2>卡牌管理</h2>
-          </div>
-          <div className="settings-actions">
-            <button type="button" onClick={onCreate}>
-              新建
-            </button>
-            <button className="secondary" type="button" onClick={onExport}>
-              导出
-            </button>
-            <button className="secondary" type="button" onClick={onClose}>
-              返回
-            </button>
-          </div>
+    <>
+      <div className="section-title compact-title">
+        <div>
+          <p className="eyebrow">Cards</p>
+          <h2>卡牌管理</h2>
         </div>
-        <div className="settings-layout">
-          <section className="settings-list">
-            <input
-              className="search-input"
-              onChange={(event) => onSearch(event.target.value)}
-              placeholder="搜索卡牌"
-              value={search}
-            />
-            <div className="settings-card-list">
-              {visibleCards.map((card) => (
-                <button
-                  className={`settings-row ${editingCard?.id === card.id ? "selected" : ""}`}
-                  key={card.id}
-                  type="button"
-                  onClick={() => onEdit(card)}
-                >
-                  <span>{card.name}</span>
-                  <b>
-                    {labelType(card.type)} / {card.rarity}
-                  </b>
-                </button>
-              ))}
-            </div>
-          </section>
-          <CardEditor card={editingCard} onDelete={onDelete} onSave={onSave} />
+        <div className="settings-actions">
+          <button type="button" onClick={onCreate}>
+            新建
+          </button>
+          <button className="secondary" type="button" onClick={onExport}>
+            导出
+          </button>
+          <button className="secondary" type="button" onClick={onClose}>
+            返回
+          </button>
         </div>
-      </article>
-    </section>
+      </div>
+      <div className="settings-layout">
+        <section className="settings-list">
+          <input
+            className="search-input"
+            onChange={(event) => onSearch(event.target.value)}
+            placeholder="搜索卡牌"
+            value={search}
+          />
+          <div className="settings-card-list">
+            {visibleCards.map((card) => (
+              <button
+                className={`settings-row ${editingCard?.id === card.id ? "selected" : ""}`}
+                key={card.id}
+                type="button"
+                onClick={() => onEdit(card)}
+              >
+                <span>{card.name}</span>
+                <b>
+                  {labelType(card.type)} / {card.rarity}
+                </b>
+              </button>
+            ))}
+          </div>
+        </section>
+        <CardEditor card={editingCard} onDelete={onDelete} onSave={onSave} />
+      </div>
+    </>
   );
 }
 
@@ -963,6 +1142,292 @@ function CardEditor({
   );
 }
 
+function GameConfigPanel({
+  config,
+  onSave,
+}: {
+  config: GameConfig;
+  onSave: (config: GameConfig) => void;
+}) {
+  const [draft, setDraft] = useState(config);
+
+  useEffect(() => {
+    setDraft(config);
+  }, [config]);
+
+  return (
+    <section className="card-editor">
+      <label>
+        游戏背景
+        <select
+          value={draft.background}
+          onChange={(event) =>
+            setDraft({ ...draft, background: event.target.value as GameConfig["background"] })
+          }
+        >
+          <option value="ember-grid">Ember Grid</option>
+          <option value="neon-rift">Neon Rift</option>
+          <option value="toxic-wave">Toxic Wave</option>
+          <option value="star-forge">Star Forge</option>
+        </select>
+      </label>
+      <label>
+        Shader
+        <select
+          value={draft.shader}
+          onChange={(event) =>
+            setDraft({ ...draft, shader: event.target.value as GameConfig["shader"] })
+          }
+        >
+          <option value="ember-grid">Ember Grid</option>
+          <option value="neon-rift">Neon Rift</option>
+          <option value="toxic-wave">Toxic Wave</option>
+          <option value="star-forge">Star Forge</option>
+        </select>
+      </label>
+      <label>
+        游戏音乐 URL
+        <input
+          value={draft.music}
+          onChange={(event) => setDraft({ ...draft, music: event.target.value })}
+        />
+      </label>
+      <label>
+        混合怪物概率：{draft.mixedMonsterChance}%
+        <input
+          max="100"
+          min="0"
+          type="range"
+          value={draft.mixedMonsterChance}
+          onChange={(event) =>
+            setDraft({ ...draft, mixedMonsterChance: Number(event.target.value) })
+          }
+        />
+      </label>
+      <label className="check-row">
+        <input
+          checked={draft.mixedMonsterEnabled}
+          type="checkbox"
+          onChange={(event) => setDraft({ ...draft, mixedMonsterEnabled: event.target.checked })}
+        />
+        开启混合怪物
+      </label>
+      <label>
+        插件 API 示例
+        <textarea
+          value={draft.pluginApi}
+          onChange={(event) => setDraft({ ...draft, pluginApi: event.target.value })}
+        />
+      </label>
+      <button type="button" onClick={() => onSave(draft)}>
+        保存游戏配置
+      </button>
+    </section>
+  );
+}
+
+function MonsterSettings({
+  editingMonster,
+  monsters,
+  onCreate,
+  onDelete,
+  onEdit,
+  onSave,
+}: {
+  editingMonster: MonsterTemplate | null;
+  monsters: MonsterTemplate[];
+  onCreate: () => void;
+  onDelete: (templateId: number) => void;
+  onEdit: (template: MonsterTemplate) => void;
+  onSave: (template: MonsterTemplate) => void;
+}) {
+  return (
+    <div className="settings-layout">
+      <section className="settings-list">
+        <button type="button" onClick={onCreate}>
+          新建怪物模板
+        </button>
+        <div className="settings-card-list">
+          {monsters.map((monster) => (
+            <button
+              className={`settings-row ${editingMonster?.id === monster.id ? "selected" : ""}`}
+              key={monster.id}
+              type="button"
+              onClick={() => onEdit(monster)}
+            >
+              <span>{monster.name}</span>
+              <b>{monster.stance}</b>
+            </button>
+          ))}
+        </div>
+      </section>
+      <MonsterEditor monster={editingMonster} onDelete={onDelete} onSave={onSave} />
+    </div>
+  );
+}
+
+function MonsterEditor({
+  monster,
+  onDelete,
+  onSave,
+}: {
+  monster: MonsterTemplate | null;
+  onDelete: (templateId: number) => void;
+  onSave: (template: MonsterTemplate) => void;
+}) {
+  const [draft, setDraft] = useState(monster);
+
+  useEffect(() => {
+    setDraft(monster);
+  }, [monster]);
+
+  if (!draft) {
+    return (
+      <section className="card-editor empty-editor">
+        <p>选择一个怪物模板。</p>
+      </section>
+    );
+  }
+
+  const updatePart = (
+    key: keyof Pick<
+      MonsterTemplate,
+      "head" | "body" | "leftHand" | "rightHand" | "leftLeg" | "rightLeg"
+    >,
+    part: MonsterPart,
+  ) => {
+    setDraft((snapshot) => (snapshot ? { ...snapshot, [key]: part } : snapshot));
+  };
+
+  return (
+    <section className="card-editor">
+      <MonsterVisual isBoss={false} visual={{ ...draft, templateId: draft.id, mixed: false }} />
+      <label>
+        ID
+        <input
+          type="number"
+          value={draft.id}
+          onChange={(event) => setDraft({ ...draft, id: Number(event.target.value) })}
+        />
+      </label>
+      <label>
+        名称
+        <input
+          value={draft.name}
+          onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+        />
+      </label>
+      <label>
+        姿态
+        <select
+          value={draft.stance}
+          onChange={(event) =>
+            setDraft({ ...draft, stance: event.target.value as MonsterTemplate["stance"] })
+          }
+        >
+          <option value="站立">站立</option>
+          <option value="四肢模式">四肢模式</option>
+          <option value="爬行">爬行</option>
+        </select>
+      </label>
+      {(["head", "body", "leftHand", "rightHand", "leftLeg", "rightLeg"] as const).map((key) => (
+        <PartEditor
+          key={key}
+          label={key}
+          part={draft[key]}
+          onChange={(part) => updatePart(key, part)}
+        />
+      ))}
+      <label>
+        挂物音频 URL
+        <input
+          value={draft.hitAudio}
+          onChange={(event) => setDraft({ ...draft, hitAudio: event.target.value })}
+        />
+      </label>
+      <label>
+        怪物背景音乐 URL
+        <input
+          value={draft.backgroundMusic}
+          onChange={(event) => setDraft({ ...draft, backgroundMusic: event.target.value })}
+        />
+      </label>
+      <div className="editor-actions">
+        <button type="button" onClick={() => onSave(draft)}>
+          保存怪物模板
+        </button>
+        <button className="secondary danger" type="button" onClick={() => onDelete(draft.id)}>
+          删除
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function PartEditor({
+  label,
+  onChange,
+  part,
+}: {
+  label: string;
+  onChange: (part: MonsterPart) => void;
+  part: MonsterPart;
+}) {
+  return (
+    <label>
+      {label}
+      <select
+        value={part.kind}
+        onChange={(event) => onChange({ ...part, kind: event.target.value as MonsterPart["kind"] })}
+      >
+        <option value="svg">SVG/文本</option>
+        <option value="png">PNG URL</option>
+      </select>
+      <input
+        value={part.value}
+        onChange={(event) => onChange({ ...part, value: event.target.value })}
+      />
+    </label>
+  );
+}
+
+function ModSettings({
+  onExport,
+  onImport,
+  pluginApi,
+}: {
+  onExport: () => void;
+  onImport: (file: File) => void;
+  pluginApi: string;
+}) {
+  return (
+    <section className="card-editor">
+      <p>Mod 包包含卡牌、游戏配置、怪物模板和插件 API 文本。</p>
+      <div className="editor-actions">
+        <button type="button" onClick={onExport}>
+          导出 Mod JSON
+        </button>
+        <label className="file-button">
+          导入 Mod JSON
+          <input
+            accept="application/json"
+            type="file"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onImport(file);
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
+      </div>
+      <label>
+        插件 API
+        <textarea readOnly value={pluginApi} />
+      </label>
+    </section>
+  );
+}
+
 function Help({ onClose }: { onClose: () => void }) {
   return (
     <section className="help-layer">
@@ -989,25 +1454,33 @@ function Help({ onClose }: { onClose: () => void }) {
   );
 }
 
-function MonsterSvg({ isBoss }: { isBoss: boolean }) {
+function MonsterVisual({ isBoss, visual }: { isBoss: boolean; visual: GeneratedMonster }) {
+  const className = `monster-build stance-${visual.stance} ${isBoss ? "boss-build" : ""}`;
   return (
-    <svg viewBox="0 0 220 210" role="img" aria-hidden="true">
-      <path
-        className="monster-shadow"
-        d="M42 178c24 18 108 23 139 0 14-10 8-29-13-31-31-3-36 12-57 12-23 0-33-17-62-11-22 4-25 18-7 30Z"
-      />
-      <path className="horn" d="M60 62 27 22c31 1 50 12 57 34ZM158 57l35-35c-5 30-18 48-45 55Z" />
-      <path
-        className="body"
-        d="M41 101c0-47 34-77 76-77 44 0 76 33 76 81 0 52-31 83-79 83-46 0-73-33-73-87Z"
-      />
-      <path className="belly" d="M75 119c9 37 65 42 81 2 7 41-11 61-43 61-31 0-48-22-38-63Z" />
-      <circle className="eye" cx="84" cy="88" r={isBoss ? 13 : 10} />
-      <circle className="eye" cx="143" cy="88" r={isBoss ? 13 : 10} />
-      <path className="mouth" d="M82 128c18 19 49 19 66 0" />
-      <path className="mark" d="M111 51 97 77h28Z" />
-    </svg>
+    <div className={className} title={visual.mixed ? "混合怪物" : visual.name}>
+      <span className="monster-part monster-part-head">{renderMonsterPart(visual.head)}</span>
+      <span className="monster-part monster-part-body">{renderMonsterPart(visual.body)}</span>
+      <span className="monster-part monster-part-left-hand">
+        {renderMonsterPart(visual.leftHand)}
+      </span>
+      <span className="monster-part monster-part-right-hand">
+        {renderMonsterPart(visual.rightHand)}
+      </span>
+      <span className="monster-part monster-part-left-leg">
+        {renderMonsterPart(visual.leftLeg)}
+      </span>
+      <span className="monster-part monster-part-right-leg">
+        {renderMonsterPart(visual.rightLeg)}
+      </span>
+    </div>
   );
+}
+
+function renderMonsterPart(part: MonsterPart) {
+  if (part.kind === "png" && part.value) {
+    return <img src={part.value} alt="" />;
+  }
+  return part.value || "?";
 }
 
 function percent(current: number, max: number) {

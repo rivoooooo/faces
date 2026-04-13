@@ -1,6 +1,8 @@
 export type CardType = "strike" | "guard" | "bleed" | "focus" | "break" | "heal";
 export type Rarity = "普通" | "稀有" | "史诗" | "传说";
 export type DropTarget = "deck" | "bag";
+export type MonsterStance = "四肢模式" | "爬行" | "站立";
+export type AssetKind = "svg" | "png";
 
 export type Card = {
   id: number;
@@ -22,6 +24,50 @@ export type Fighter = {
   level: number;
 };
 
+export type MonsterPart = {
+  kind: AssetKind;
+  value: string;
+};
+
+export type MonsterTemplate = {
+  id: number;
+  name: string;
+  stance: MonsterStance;
+  head: MonsterPart;
+  body: MonsterPart;
+  leftHand: MonsterPart;
+  rightHand: MonsterPart;
+  leftLeg: MonsterPart;
+  rightLeg: MonsterPart;
+  hitAudio: string;
+  backgroundMusic: string;
+};
+
+export type GameConfig = {
+  id: "global";
+  background: "ember-grid" | "neon-rift" | "toxic-wave" | "star-forge";
+  music: string;
+  shader: "ember-grid" | "neon-rift" | "toxic-wave" | "star-forge";
+  mixedMonsterEnabled: boolean;
+  mixedMonsterChance: number;
+  pluginApi: string;
+};
+
+export type GeneratedMonster = {
+  name: string;
+  templateId: number;
+  mixed: boolean;
+  stance: MonsterStance;
+  head: MonsterPart;
+  body: MonsterPart;
+  leftHand: MonsterPart;
+  rightHand: MonsterPart;
+  leftLeg: MonsterPart;
+  rightLeg: MonsterPart;
+  hitAudio: string;
+  backgroundMusic: string;
+};
+
 export type GameState = {
   started: boolean;
   stage: number;
@@ -34,6 +80,7 @@ export type GameState = {
   rewardIds: number[];
   player: Fighter;
   monster: Fighter;
+  monsterVisual: GeneratedMonster;
   monsterCardIds: number[];
   monsterCardIndex: number;
   log: string[];
@@ -53,6 +100,41 @@ export const typeOrder: CardType[] = ["strike", "guard", "bleed", "focus", "brea
 export const rarityOrder: Rarity[] = ["普通", "稀有", "史诗", "传说"];
 
 export const defaultCardPool = Array.from({ length: 1000 }, (_, index) => createCard(index + 1));
+
+const svgParts = {
+  head: ["◖●●◗", "◆_◆", "◉‿◉", "▲▲"],
+  body: ["⬢", "◆", "⬟", "▰"],
+  hand: ["╱", "╲", "⌁", "━"],
+  leg: ["╱", "╲", "╿", "╽"],
+};
+
+export const defaultGameConfig: GameConfig = {
+  id: "global",
+  background: "ember-grid",
+  music: "",
+  shader: "ember-grid",
+  mixedMonsterEnabled: true,
+  mixedMonsterChance: 10,
+  pluginApi:
+    "export function setup(api) { api.registerMonsterTemplate(template); api.registerCard(card); }",
+};
+
+export const defaultMonsterTemplates: MonsterTemplate[] = Array.from({ length: 10 }, (_, index) => {
+  const id = index + 1;
+  return {
+    id,
+    name: `怪物模板-${String(id).padStart(2, "0")}`,
+    stance: id % 3 === 0 ? "爬行" : id % 2 === 0 ? "四肢模式" : "站立",
+    head: { kind: "svg", value: svgParts.head[index % svgParts.head.length] },
+    body: { kind: "svg", value: svgParts.body[index % svgParts.body.length] },
+    leftHand: { kind: "svg", value: svgParts.hand[index % svgParts.hand.length] },
+    rightHand: { kind: "svg", value: svgParts.hand[(index + 1) % svgParts.hand.length] },
+    leftLeg: { kind: "svg", value: svgParts.leg[index % svgParts.leg.length] },
+    rightLeg: { kind: "svg", value: svgParts.leg[(index + 1) % svgParts.leg.length] },
+    hitAudio: "",
+    backgroundMusic: "",
+  };
+});
 
 export function createCard(id: number): Card {
   const type = typeOrder[id % typeOrder.length];
@@ -145,6 +227,35 @@ export function createMonster(stage: number): Fighter {
   };
 }
 
+export function generateMonsterVisual(
+  templates: MonsterTemplate[],
+  config: GameConfig,
+): GeneratedMonster {
+  const safeTemplates = templates.length > 0 ? templates : defaultMonsterTemplates;
+  const base = safeTemplates[Math.floor(Math.random() * safeTemplates.length)];
+  const shouldMix = config.mixedMonsterEnabled && Math.random() * 100 < config.mixedMonsterChance;
+
+  if (!shouldMix) {
+    return { ...base, templateId: base.id, mixed: false };
+  }
+
+  const pick = () => safeTemplates[Math.floor(Math.random() * safeTemplates.length)];
+  return {
+    name: `混合-${base.name}`,
+    templateId: base.id,
+    mixed: true,
+    stance: pick().stance,
+    head: pick().head,
+    body: pick().body,
+    leftHand: pick().leftHand,
+    rightHand: pick().rightHand,
+    leftLeg: pick().leftLeg,
+    rightLeg: pick().rightLeg,
+    hitAudio: base.hitAudio,
+    backgroundMusic: base.backgroundMusic,
+  };
+}
+
 export function drawUniqueIds(cards: Card[], count: number, avoid: number[] = []) {
   const picked: number[] = [];
   const blocked = new Set(avoid);
@@ -160,7 +271,11 @@ export function drawUniqueIds(cards: Card[], count: number, avoid: number[] = []
   return picked;
 }
 
-export function createGameState(cards: Card[]): GameState {
+export function createGameState(
+  cards: Card[],
+  templates = defaultMonsterTemplates,
+  config = defaultGameConfig,
+): GameState {
   const deckIds = drawUniqueIds(cards, 10);
   return {
     started: true,
@@ -174,6 +289,7 @@ export function createGameState(cards: Card[]): GameState {
     rewardIds: [],
     player: { hp: 5, maxHp: 5, block: 0, bleed: 0, focus: 0, level: 1 },
     monster: createMonster(1),
+    monsterVisual: generateMonsterVisual(templates, config),
     monsterCardIds: drawUniqueIds(cards, 2),
     monsterCardIndex: 0,
     log: ["新游戏开始。"],
@@ -194,6 +310,7 @@ export function createEmptyGameState(): GameState {
     rewardIds: [],
     player: { hp: 5, maxHp: 5, block: 0, bleed: 0, focus: 0, level: 1 },
     monster: createMonster(1),
+    monsterVisual: generateMonsterVisual(defaultMonsterTemplates, defaultGameConfig),
     monsterCardIds: [],
     monsterCardIndex: 0,
     log: ["卡牌数据库初始化中。"],
@@ -260,7 +377,12 @@ export function addCardToDeck(
   };
 }
 
-export function proceedToNextStage(snapshot: GameState, cards: Card[]): GameState {
+export function proceedToNextStage(
+  snapshot: GameState,
+  cards: Card[],
+  templates = defaultMonsterTemplates,
+  config = defaultGameConfig,
+): GameState {
   const stage = snapshot.stage + 1;
   return {
     ...snapshot,
@@ -273,6 +395,7 @@ export function proceedToNextStage(snapshot: GameState, cards: Card[]): GameStat
       level: Math.max(snapshot.player.level, Math.ceil(stage / 3)),
     },
     monster: createMonster(stage),
+    monsterVisual: generateMonsterVisual(templates, config),
     monsterCardIds: drawUniqueIds(cards, 2),
     monsterCardIndex: 0,
     rewardIds: [],
@@ -284,7 +407,12 @@ export function proceedToNextStage(snapshot: GameState, cards: Card[]): GameStat
   };
 }
 
-export function chooseBossHealth(snapshot: GameState, cards: Card[]): GameState {
+export function chooseBossHealth(
+  snapshot: GameState,
+  cards: Card[],
+  templates = defaultMonsterTemplates,
+  config = defaultGameConfig,
+): GameState {
   if (!snapshot.awaitingReward || snapshot.stage % 10 !== 0) return snapshot;
   return proceedToNextStage(
     {
@@ -300,6 +428,8 @@ export function chooseBossHealth(snapshot: GameState, cards: Card[]): GameState 
       ],
     },
     cards,
+    templates,
+    config,
   );
 }
 

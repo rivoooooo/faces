@@ -1,10 +1,21 @@
-import { defaultCardPool, normalizeCard, type Card, type GameState } from "./game";
+import {
+  defaultCardPool,
+  defaultGameConfig,
+  defaultMonsterTemplates,
+  normalizeCard,
+  type Card,
+  type GameConfig,
+  type GameState,
+  type MonsterTemplate,
+} from "./game";
 
 export type ConfigSnapshot = {
   id: string;
   createdAt: number;
   source: "global-config";
   cards: Card[];
+  gameConfig: GameConfig;
+  monsterTemplates: MonsterTemplate[];
   hash: string;
 };
 
@@ -22,6 +33,8 @@ export type SaveSlot = {
 
 const dbName = "card-roguelike-index-db";
 const cardStoreName = "cards";
+const configStoreName = "gameConfig";
+const monsterStoreName = "monsterTemplates";
 const snapshotStoreName = "configSnapshots";
 const saveStoreName = "saveSlots";
 
@@ -59,6 +72,62 @@ export async function deleteCardFromDb(cardId: number) {
   db.close();
 }
 
+export async function loadGameConfig(): Promise<GameConfig> {
+  const db = await openGameDb();
+  const tx = db.transaction(configStoreName, "readwrite");
+  const store = tx.objectStore(configStoreName);
+  const existing = await requestToPromise<GameConfig | undefined>(store.get("global"));
+  if (!existing) {
+    store.put(defaultGameConfig);
+    await transactionDone(tx);
+    db.close();
+    return defaultGameConfig;
+  }
+  await transactionDone(tx);
+  db.close();
+  return { ...defaultGameConfig, ...existing, id: "global" };
+}
+
+export async function putGameConfig(config: GameConfig) {
+  const db = await openGameDb();
+  const tx = db.transaction(configStoreName, "readwrite");
+  tx.objectStore(configStoreName).put({ ...config, id: "global" });
+  await transactionDone(tx);
+  db.close();
+}
+
+export async function loadMonsterTemplates(): Promise<MonsterTemplate[]> {
+  const db = await openGameDb();
+  const tx = db.transaction(monsterStoreName, "readwrite");
+  const store = tx.objectStore(monsterStoreName);
+  const existing = await requestToPromise<MonsterTemplate[]>(store.getAll());
+  if (existing.length === 0) {
+    defaultMonsterTemplates.forEach((template) => store.put(template));
+    await transactionDone(tx);
+    db.close();
+    return [...defaultMonsterTemplates];
+  }
+  await transactionDone(tx);
+  db.close();
+  return existing.sort((a, b) => a.id - b.id);
+}
+
+export async function putMonsterTemplate(template: MonsterTemplate) {
+  const db = await openGameDb();
+  const tx = db.transaction(monsterStoreName, "readwrite");
+  tx.objectStore(monsterStoreName).put(template);
+  await transactionDone(tx);
+  db.close();
+}
+
+export async function deleteMonsterTemplate(templateId: number) {
+  const db = await openGameDb();
+  const tx = db.transaction(monsterStoreName, "readwrite");
+  tx.objectStore(monsterStoreName).delete(templateId);
+  await transactionDone(tx);
+  db.close();
+}
+
 export async function loadSaveSlots(): Promise<SaveSlot[]> {
   const db = await openGameDb();
   const tx = db.transaction(saveStoreName, "readonly");
@@ -85,13 +154,19 @@ export async function putSaveSlot(save: SaveSlot) {
   db.close();
 }
 
-export async function createSnapshot(cards: Card[]): Promise<ConfigSnapshot> {
+export async function createSnapshot(
+  cards: Card[],
+  gameConfig: GameConfig,
+  monsterTemplates: MonsterTemplate[],
+): Promise<ConfigSnapshot> {
   const snapshot: ConfigSnapshot = {
     id: crypto.randomUUID(),
     createdAt: Date.now(),
     source: "global-config",
     cards: cards.map(normalizeCard),
-    hash: hashCards(cards),
+    gameConfig,
+    monsterTemplates,
+    hash: hashSnapshot(cards, gameConfig, monsterTemplates),
   };
   const db = await openGameDb();
   const tx = db.transaction(snapshotStoreName, "readwrite");
@@ -143,11 +218,17 @@ export function updateSaveSlot(save: SaveSlot, gameState: GameState): SaveSlot {
 
 function openGameDb() {
   return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(dbName, 2);
+    const request = indexedDB.open(dbName, 3);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(cardStoreName)) {
         db.createObjectStore(cardStoreName, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(configStoreName)) {
+        db.createObjectStore(configStoreName, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(monsterStoreName)) {
+        db.createObjectStore(monsterStoreName, { keyPath: "id" });
       }
       if (!db.objectStoreNames.contains(snapshotStoreName)) {
         db.createObjectStore(snapshotStoreName, { keyPath: "id" });
@@ -176,14 +257,26 @@ function transactionDone(tx: IDBTransaction) {
   });
 }
 
-function hashCards(cards: Card[]) {
+function hashSnapshot(cards: Card[], gameConfig: GameConfig, monsterTemplates: MonsterTemplate[]) {
+  const configText = JSON.stringify(gameConfig);
+  const monsterText = JSON.stringify(monsterTemplates);
   return String(
-    cards.reduce((hash, card) => {
-      const value = `${card.id}:${card.name}:${card.type}:${card.power}:${card.cost}:${card.rarity}:${card.text}:${card.image}`;
-      return Array.from(value).reduce(
-        (innerHash, char) => (innerHash * 31 + char.charCodeAt(0)) >>> 0,
-        hash,
-      );
-    }, 2166136261),
+    cards.reduce(
+      (hash, card) => {
+        const value = `${card.id}:${card.name}:${card.type}:${card.power}:${card.cost}:${card.rarity}:${card.text}:${card.image}`;
+        return Array.from(value).reduce(
+          (innerHash, char) => (innerHash * 31 + char.charCodeAt(0)) >>> 0,
+          hash,
+        );
+      },
+      hashText(`${configText}:${monsterText}`),
+    ),
+  );
+}
+
+function hashText(value: string) {
+  return Array.from(value).reduce(
+    (hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0,
+    2166136261,
   );
 }
